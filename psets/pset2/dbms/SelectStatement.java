@@ -4,6 +4,7 @@
  * DBMS Implementation
  */
 
+import java.io.IOException;
 import java.util.*;
 import com.sleepycat.je.*;
 
@@ -69,7 +70,14 @@ public class SelectStatement extends SQLStatement {
              * PS 2: Add code here to implement the rest of the method
              * as described in the assignment.
              */
-            
+            for(int i = 0; i < this.numTables(); i++){
+                Table table = this.getTable(i);
+                if(!table.open().equals(OperationStatus.SUCCESS)){
+                    throw new IOException("[!] ERROR: failed to open database at index " + i + " !");
+                }
+                iter = new TableIterator(this, table, true);
+                iter.printAll(System.out);
+            }
 
         } catch (Exception e) {
             String errMsg = e.getMessage();
