@@ -161,7 +161,19 @@ public class TableIterator {
         /* 
          * PS 2: replace the following return statement with your 
          * implementation of the rest of this method.
-         */
+         */     
+        while(!this.where.isTrue()){
+            OperationStatus ret = this.cursor.getNext(this.key, this.value, null); 
+            if (ret == OperationStatus.NOTFOUND) {
+                return false;
+            }
+        }
+        
+        /* Only increment num_tuples if the WHERE clause isn't violated. */
+        if (this.where.isTrue()) {
+            this.numTuples++;
+        }
+
         return true;
     }
     
@@ -198,8 +210,6 @@ public class TableIterator {
          * implementation of this method.
          */
         Column col = this.table.getColumn(colIndex);
-        System.out.println(col.getValue());
-        
         return col.getValue();
     }
     
