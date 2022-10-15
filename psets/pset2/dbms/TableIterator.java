@@ -5,6 +5,8 @@
  */
 
 import java.io.*;
+import java.util.Arrays;
+
 import com.sleepycat.je.*;
 
 /**
@@ -213,8 +215,51 @@ public class TableIterator {
          * PS 2: replace the following return statement with your 
          * implementation of this method.
          */
-        
-        return null;
+        if(this.value.getSize() == 0){
+            throw new IllegalStateException("[!] ERROR: table iterator mispositioned!");
+        }
+
+        RowInput vRowInput = new RowInput(value.getData());
+        RowInput kRowInput = new RowInput(key.getData());
+        Short currOff;
+        int counter = 0;
+        do {
+            currOff = vRowInput.readNextShort();
+            if(counter == colIndex){
+                if(currOff == -1){
+                    return null;
+                }
+                if(currOff == -2){
+                    return readData(kRowInput, table.getColumn(colIndex).getType(), 0, key.getSize());
+                }
+
+                Short next; 
+                do {
+                    next = vRowInput.readNextShort();
+                    counter++;
+                } while(next == -1);
+                int numBytes = next - currOff;
+                return readData(vRowInput, table.getColumn(colIndex).getType(), currOff, numBytes);
+            }
+            counter++;
+        } while(currOff < value.getSize());
+
+        return null; //if we get here, nothing was read
+    }
+
+    private Object readData(RowInput ri, Integer type, int offset, int size){
+         switch(type){
+            case 0:
+                return ri.readIntAtOffset(offset);
+            case 11:
+            case 1:
+                return ri.readDoubleAtOffset(offset);
+            case 2:
+            case 3:
+                return ri.readBytesAtOffset(offset, size);
+            default:
+                return null;
+         }
     }
     
     /**
