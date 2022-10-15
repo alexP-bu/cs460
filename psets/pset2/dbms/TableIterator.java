@@ -197,7 +197,10 @@ public class TableIterator {
          * PS 2: replace the following return statement with your 
          * implementation of this method.
          */
-        return null;
+        Column col = this.table.getColumn(colIndex);
+        System.out.println(col.getValue());
+        
+        return col.getValue();
     }
     
     /**

@@ -64,10 +64,28 @@ public class InsertStatement extends SQLStatement {
              * PS 2: Add code below to perform the actual insertion, 
              * and to print the appropriate message after it has occurred.
              */
-            
+            Database db = table.getDB();
+            byte[] keyBuffer = row.getKeyBuffer().getBufferBytes();
+            byte[] valueBuffer = row.getValueBuffer().getBufferBytes();
+            int keySize = row.getKeyBuffer().size();
+            int valueSize = row.getValueBuffer().size();
+            int start = 0;
+            DatabaseEntry key = new DatabaseEntry(keyBuffer, start, keySize);
+            DatabaseEntry value = new DatabaseEntry(valueBuffer, start, valueSize);
+            switch(db.putNoOverwrite(null, key, value)){
+                case KEYEXIST:
+                    System.out.println("[!] ERROR: Failed to insert item with duplicate primary key!");
+                    break;
+                case SUCCESS:
+                    System.out.println("[*] STATUS: Successfully inserted row into database.");
+                    break;
+                default:
+                    break;
+            }
             
         } catch (Exception e) {
             String errMsg = e.getMessage();
+            e.printStackTrace();
             if (errMsg != null) {
                 System.err.println(errMsg + ".");
             }

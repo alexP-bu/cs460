@@ -69,14 +69,34 @@ public class InsertRow {
         //write offsets
         this.writeOffsets(columnVals, offsets);
         //write the values to the value buffer
-        //this.writeCols();
+        this.writeValues(columnVals, offsets, valueBuffer);
     }
         
-    private void writeOffsets(Object[] vals, int[] buffer) throws IOException {
-        //get num offsets
-        int valFirstOffset = (vals.length + 1) * 2;
-        //get primary key column if it exists and set its offset to -2
-        Column primaryColumn = table.primaryKeyColumn();
+    private void writeValues(Object[] vals, int[] offs, RowOutput buffer) throws IOException {
+        //write offsets to buffer
+        for(int i = 0; i < offs.length; i++){
+            if(offs[i] == -2){
+                buffer.writeByte(-1);
+                buffer.writeByte(-2);
+            }else if(offs[i] == -1){
+                buffer.writeByte(-1);
+                buffer.writeByte(-1);
+            }else{
+                buffer.writeShort(offs[i]);
+            }
+        }
+        
+        //write vals to buffer
+        for(int i = 0; i < vals.length; i++){
+            if((table.primaryKeyColumn().getIndex() != i) && (vals[i] != null)){
+                processRowOutputItem(table.getColumn(i), vals[i], buffer);
+            }
+        }
+    }
+
+    private void writeOffsets(Object[] vals, int[] buffer) {
+        int valFirstOffset = (vals.length + 1) * 2; //get num offsets
+        Column primaryColumn = table.primaryKeyColumn(); //get primary key column if it exists
         Integer primaryIndex = primaryColumn.getIndex();
         if(primaryColumn == null || primaryIndex == null){
             //handle if table doesn't have a primary key column
@@ -87,78 +107,76 @@ public class InsertRow {
         boolean firstWritten = false;
         for(int i = 0; i < vals.length; i++){
             Column col = table.getColumn(i);
-            if(col == null){
+            if(vals[i] == null){
                 buffer[i] = -1;
-                continue;
             }else if(i == primaryIndex){
                 buffer[i] = -2;
-                continue;
             }else{
-                //if this is the first offset
-                int currColumnType = col.getType();
-                System.out.println(currColumnType);
-                if(!firstWritten){
-                    System.out.println("writing first...");
+                if(!firstWritten){ 
                     currSum = valFirstOffset;
                     firstWritten = true;
+                    buffer[i] = currSum;
                 }
-                switch(currColumnType){
-                    case 0:
-                        currSum += 4;
-                        break;
-                    case 1:
-                        currSum += 8;
-                        break;
-                    case 2:
-                        currSum += 1;  
-                        break;
-                    case 3:
-                        currSum += 10;
-                        break;
-                    case 11:
-                        currSum += 8;  
-                        break;
-                    default:
-                        System.out.println("Unknown column type...");
-                    }
-                }
-                buffer[i] = currSum;
+                currSum = processColumnOffset(vals, i, col.getType(), currSum);
+                buffer[i+1] = currSum;
             }
         }
-    
+    }
 
-    private void writeKey(Object[] vals, RowOutput buffer) {
+    private int processColumnOffset(Object[] vals, int i, Integer currColumnType, int currSum) {
+        if(vals[i] == null){
+            return currSum;
+        }
+
+        switch(currColumnType){
+            case 0:
+                currSum += 4;
+                break;
+            case 1:
+                currSum += 8;
+                break;
+            case 2:
+            case 3:
+                currSum += ((String)vals[i]).length();
+                break;
+            case 11:
+                currSum += 8;  
+                break;
+            default:
+                System.out.println("Unknown column type...");
+                break;
+        }
+        return currSum;
+    }
+
+    private void writeKey(Object[] vals, RowOutput buffer) throws IOException {
         Column pCol = table.primaryKeyColumn();
         int pColi = pCol.getIndex();
         if(pCol != null){
-            //get col value
-            Object value = vals[pColi];
-            try{
-                switch(pCol.getType()){
-                    case 0:
-                        buffer.writeInt(((Integer)value).intValue());
-                        break;
-                    case 1:
-                        buffer.writeDouble(((Double)value).doubleValue());
-                        break;
-                    case 2:
-                        buffer.writeBytes(((String)value));
-                        break;
-                    case 3:
-                        buffer.writeBytes(((String)value));
-                        break;
-                    case 11:
-                        buffer.writeLong((long)value);
-                        break;
-                    default:
-                        System.out.println("Unkown column type!");
-            }
-            } catch (IOException e){
-                System.out.println("Error writing to key buffer...!");
-                e.printStackTrace();
-            }
+            Object value = vals[pColi]; //get col value
+            processRowOutputItem(pCol, value, buffer);
         } else {
-            //TODO: column doesn't have a marked primary key column
+            //handle if column doesn't have a marked primary key column
+        }
+    }
+
+    private void processRowOutputItem(Column pCol, Object value, RowOutput buffer) throws IOException {
+        switch(pCol.getType()){
+            case 0:
+                buffer.writeInt(((Integer)value).intValue());
+                break;
+            case 1:
+                buffer.writeDouble(((Double)value).doubleValue());
+                break;
+            case 2:
+            case 3:
+                buffer.writeBytes(((String)value));
+                break;
+            case 11:
+                buffer.writeLong((long)value);
+                break;
+            default:
+                System.out.println("Unkown column type!");
         }
     }
 
