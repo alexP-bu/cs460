@@ -98,10 +98,6 @@ public class InsertRow {
         int valFirstOffset = (vals.length + 1) * 2; //get num offsets
         Column primaryColumn = table.primaryKeyColumn(); //get primary key column if it exists
         Integer primaryIndex = primaryColumn.getIndex();
-        if(primaryColumn == null || primaryIndex == null){
-            //handle if table doesn't have a primary key column
-            primaryIndex = 0;
-        }
         //write offsets
         int currSum = 0;
         boolean firstWritten = false;
@@ -152,12 +148,8 @@ public class InsertRow {
     private void writeKey(Object[] vals, RowOutput buffer) throws IOException {
         Column pCol = table.primaryKeyColumn();
         int pColi = pCol.getIndex();
-        if(pCol != null){
-            Object value = vals[pColi]; //get col value
-            processRowOutputItem(pCol, value, buffer);
-        } else {
-            //handle if column doesn't have a marked primary key column
-        }
+        Object value = vals[pColi]; //get col value
+        processRowOutputItem(pCol, value, buffer);
     }
 
     private void processRowOutputItem(Column pCol, Object value, RowOutput buffer) throws IOException {
