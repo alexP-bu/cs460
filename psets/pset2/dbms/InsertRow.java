@@ -6,12 +6,7 @@
 
 import java.io.*;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-import java.util.stream.IntStream;
+
 /**
  * A class that represents a row that will be inserted in a table in a
  * relational database.
@@ -25,11 +20,6 @@ public class InsertRow {
     private RowOutput keyBuffer;   // buffer for the marshalled row's key
     private RowOutput valueBuffer; // buffer for the marshalled row's value
     private int[] offsets;         // offsets for header of marshalled row's value
-    
-    // maps of functions to write to buffers 
-    Map<Integer, TBiConsumer<RowOutput, Object>> bufferWriteMap; 
-    Map<Integer, Function<Object, Integer>> offsetWriteMap;
-
     
     /** Constants for special offsets **/
     /** The field with this offset has a null value. */
@@ -50,26 +40,10 @@ public class InsertRow {
         this.columnVals = values;
         this.keyBuffer = new RowOutput();
         this.valueBuffer = new RowOutput();
-        this.bufferWriteMap = new HashMap<>();
-        this.offsetWriteMap = new HashMap<>();
         
         // Note that we need one more offset than value,
         // so that we can store the offset of the end of the record.
         this.offsets = new int[values.length + 1];
-
-        //setup functional maps
-        bufferWriteMap.put(0,  (buff, val) -> buff.writeInt(((Integer)val).intValue()));
-        bufferWriteMap.put(1,  (buff, val) -> buff.writeDouble(((Double)val).doubleValue()));
-        bufferWriteMap.put(2,  (buff, val) -> buff.writeBytes((String)val));
-        bufferWriteMap.put(3,  (buff, val) -> buff.writeBytes((String)val));
-        bufferWriteMap.put(11, (buff, val) -> buff.writeLong((long)val));
-        bufferWriteMap.put(99, (buff, val) -> buff.writeShort(((Integer)val).shortValue()));
-        
-        offsetWriteMap.put(0,  val  -> 4);
-        offsetWriteMap.put(1,  val  -> 8);
-        offsetWriteMap.put(2,  val  -> ((String)val).length());
-        offsetWriteMap.put(3,  val  -> ((String)val).length());
-        offsetWriteMap.put(11, val -> 8);
     }
     
     /**
@@ -82,7 +56,7 @@ public class InsertRow {
      * exception. In reality, an IOException should *not* occur in the
      * context of our RowOutput class.)
      */
-    public void marshall() {
+    public void marshall() throws IOException {
         /* 
          * PS 2: Implement this method. 
          * 
@@ -91,39 +65,33 @@ public class InsertRow {
          * with the appropriate offsets).
          */
         //write the key to the key buffer
-        bufferWriteMap.get(table.primaryKeyColumn().getType())
-                      .accept(keyBuffer, columnVals[table.primaryKeyColumn().getIndex()]);
-
+        this.writeKey(columnVals, keyBuffer);
         //write offsets
         this.writeOffsets(columnVals, offsets);
+        //write the values to the value buffer
+        this.writeValues(columnVals, offsets, valueBuffer);
+    }
         
-        //write the offsets to the value buffer
-        Arrays.stream(offsets)
-              .forEach(off -> {
-                TBiConsumer<RowOutput, Object> func = bufferWriteMap.get(99); //99 maps to write short
-                switch(off){
-                    case -2:
-                        func.accept(valueBuffer, -2);
-                        break; 
-                    case -1:
-                        func.accept(valueBuffer, -1);
-                        break;
-                    default:
-                        func.accept(valueBuffer, off);
-                        break;
-                }
-               });
-               
-        //write the vals into the value buffer    
-        AtomicInteger i = new AtomicInteger(0);
-        Arrays.stream(columnVals)
-              .forEach(val -> {
-                if(table.primaryKeyColumn().getIndex() != i.get() && (val != null)){
-                    bufferWriteMap.get(table.getColumn(i.get()).getType())
-                                  .accept(valueBuffer, val);
-                }
-                i.getAndIncrement();
-              });
+    private void writeValues(Object[] vals, int[] offs, RowOutput buffer) throws IOException {
+        //write offsets to buffer
+        for(int i = 0; i < offs.length; i++){
+            if(offs[i] == -2){
+                buffer.writeByte(-1);
+                buffer.writeByte(-2);
+            }else if(offs[i] == -1){
+                buffer.writeByte(-1);
+                buffer.writeByte(-1);
+            }else{
+                buffer.writeShort(offs[i]);
+            }
+        }
+        
+        //write vals to buffer
+        for(int i = 0; i < vals.length; i++){
+            if((table.primaryKeyColumn().getIndex() != i) && (vals[i] != null)){
+                processRowOutputItem(table.getColumn(i), vals[i], buffer);
+            }
+        }
     }
 
     private void writeOffsets(Object[] vals, int[] buffer) {
@@ -142,12 +110,65 @@ public class InsertRow {
                     j++;
                 }
                 offsets[j] = currSum;
-                currSum += offsetWriteMap.get(col.getType()).apply(vals[i]);
+                currSum = processColumnOffset(vals, j, col.getType(), currSum);
             }
         }
         
         if(offsets[offsets.length - 1] == 0){
             offsets[offsets.length - 1] = currSum;
+        }
+    }
+
+    private int processColumnOffset(Object[] vals, int i, Integer currColumnType, int currSum) {
+        if(vals[i] == null){
+            return currSum;
+        }
+
+        switch(currColumnType){
+            case 0:
+                currSum += 4;
+                break;
+            case 1:
+                currSum += 8;
+                break;
+            case 2:
+            case 3:
+                currSum += ((String)vals[i]).length();
+                break;
+            case 11:
+                currSum += 8;  
+                break;
+            default:
+                //System.out.println("[!] ERROR: Unknown column type...");
+                break;
+        }
+        return currSum;
+    }
+
+    private void writeKey(Object[] vals, RowOutput buffer) throws IOException {
+        Column pCol = table.primaryKeyColumn();
+        int pColi = pCol.getIndex();
+        Object value = vals[pColi]; //get col value
+        processRowOutputItem(pCol, value, buffer);
+    }
+
+    private void processRowOutputItem(Column pCol, Object value, RowOutput buffer) throws IOException {
+        switch(pCol.getType()){
+            case 0:
+                buffer.writeInt(((Integer)value).intValue());
+                break;
+            case 1:
+                buffer.writeDouble(((Double)value).doubleValue());
+                break;
+            case 2:
+            case 3:
+                buffer.writeBytes(((String)value));
+                break;
+            case 11:
+                buffer.writeLong((long)value);
+                break;
+            default:
+                //System.out.println("[!] ERROR: Unkown column type!");
         }
     }
 

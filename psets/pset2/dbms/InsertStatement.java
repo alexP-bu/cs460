@@ -4,7 +4,6 @@
  * DBMS Implementation
  */
 
-import java.io.IOException;
 import java.util.*;
 import com.sleepycat.je.*;
 
@@ -75,7 +74,7 @@ public class InsertStatement extends SQLStatement {
             DatabaseEntry value = new DatabaseEntry(valueBuffer, start, valueSize);
             switch(db.putNoOverwrite(null, key, value)){
                 case KEYEXIST:
-                    throw new Exception("There is an existing row with the specified primary key.");
+                    throw new Exception("There is an existing row with the specified primary key");
                 case SUCCESS:
                     System.out.println("Added 1 row to " + table.getName() + ".");
                     break;
@@ -85,7 +84,6 @@ public class InsertStatement extends SQLStatement {
             
         } catch (Exception e) {
             String errMsg = e.getMessage();
-            e.printStackTrace();
             if (errMsg != null) {
                 System.err.println(errMsg + ".");
             }
