@@ -237,7 +237,7 @@ public class TableIterator {
                 do {
                     next = vRowInput.readNextShort();
                     counter++;
-                } while(next == -1);
+                } while((next == -1) || (next == -2));
                 int numBytes = next - currOff;
                 return readData(vRowInput, table.getColumn(colIndex).getType(), currOff, numBytes);
             }

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.IntStream;
 /**
  * A class that represents a row that will be inserted in a table in a
  * relational database.
@@ -116,23 +117,20 @@ public class InsertRow {
         //write the vals into the value buffer    
         AtomicInteger i = new AtomicInteger(0);
         Arrays.stream(columnVals)
-              .filter(Objects::nonNull)
               .forEach(val -> {
-                if(table.primaryKeyColumn().getIndex() != i.get()){
+                if(table.primaryKeyColumn().getIndex() != i.get() && (val != null)){
                     bufferWriteMap.get(table.getColumn(i.get()).getType())
-                                  .accept(valueBuffer, columnVals[i.get()]);
+                                  .accept(valueBuffer, val);
                 }
                 i.getAndIncrement();
               });
     }
 
     private void writeOffsets(Object[] vals, int[] buffer) {
-        int valFirstOffset = (vals.length + 1) * 2; //get num offsets
         Column primaryColumn = table.primaryKeyColumn(); //get primary key column if it exists
         Integer primaryIndex = primaryColumn.getIndex();
-        //write offsets
-        int currSum = 0;
-        boolean firstWritten = false;
+        int currSum = (vals.length + 1) * 2;
+        int j = 0;
         for(int i = 0; i < vals.length; i++){
             Column col = table.getColumn(i);
             if(vals[i] == null){
@@ -140,14 +138,16 @@ public class InsertRow {
             }else if(i == primaryIndex){
                 buffer[i] = -2;
             }else{
-                if(!firstWritten){ 
-                    currSum = valFirstOffset;
-                    firstWritten = true;
-                    buffer[i] = currSum;
+                while(offsets[j] != 0){
+                    j++;
                 }
+                offsets[j] = currSum;
                 currSum += offsetWriteMap.get(col.getType()).apply(vals[i]);
-                buffer[i+1] = currSum;
             }
+        }
+        
+        if(offsets[offsets.length - 1] == 0){
+            offsets[offsets.length - 1] = currSum;
         }
     }
 

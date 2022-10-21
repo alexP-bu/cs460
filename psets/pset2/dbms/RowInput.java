@@ -6,6 +6,20 @@
 
 import java.io.*;
 import java.util.*;
+import java.util.function.BiConsumer;
+
+abstract interface TBiConsumer<T, U> extends BiConsumer<T, U> {
+    default void accept(T arg0, U arg1) {
+        try {
+            acc(arg0, arg1);
+        } catch (final IOException e){
+            e.printStackTrace();
+        }
+    }
+
+    void acc(T arg0, U arg1) throws IOException;
+}
+
 
 /**
  * An input stream with methods that read values from a byte array.
